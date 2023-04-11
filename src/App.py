@@ -3,12 +3,37 @@ import imaplib
 import config
 
 
+class MyMail():
+    
+    def __init__(self, mail):
+        self._raw = mail
+        self._from = mail['From']
+        self._to = mail['To']
+        self._subject = mail['Subject']
+        self._date = mail['Date']
+        
+        self._content = self.get_content(mail)
+        
+    def get_content(self, mail):
+        if mail.is_multipart():
+            for part in mail.get_payload():
+                if part.get_content_type() == 'text/plain':
+                    return part.get_payload(decode=True).decode()
+        else:
+            if mail.get_content_type() == 'text/plain':
+                return mail.get_payload(decode=True).decode()
+            
+    def show(self):
+        return f"from: {self._from}\nto: {self._to}\nsubject: {self._subject}\n\n{self._content}\n----------------\n"
+
+
+
 def get_emails():
     imap = imaplib.IMAP4_SSL(config.HOST)
     imap.login(config.MAILADDRES, config.PASSWORD)
     
     # select mailbox and search for emails
-    imap.select('Inbox')
+    imap.select(config.INBOX)
     _, data = imap.search(None, 'ALL')
     
     # iterate over email IDs and fetch data for each email
@@ -16,20 +41,7 @@ def get_emails():
         _, data = imap.fetch(num, '(RFC822)')
         msg = email.message_from_bytes(data[0][1])
     
-        # print email headers
-        print('From:', msg['From'])
-        print('To:', msg['To'])
-        print('Subject:', msg['Subject'])
-        print('Date:', msg['Date'])
-    
-        # print email body if it's in plain text format
-        if msg.is_multipart():
-            for part in msg.get_payload():
-                if part.get_content_type() == 'text/plain':
-                    print('Body:', part.get_payload(decode=True).decode())
-        else:
-            if msg.get_content_type() == 'text/plain':
-                print('Body:', msg.get_payload(decode=True).decode())
+        yield MyMail(msg)
 
     
     # close the connection
@@ -40,7 +52,8 @@ def get_emails():
 def main():
     
     try:
-        get_emails()
+        for mail in get_emails():
+            print(mail.show())
         
     except Exception as e:
         print("wrong address or server")
